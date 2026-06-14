@@ -19,10 +19,6 @@ Run:  python python/cpgmap_analysis.py
 import os, json, glob, bz2
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
@@ -36,8 +32,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data", "raw")
 RES = os.path.join(ROOT, "results")
 os.makedirs(RES, exist_ok=True)
-sns.set_theme(style="whitegrid")
 RNG = 42
+
+def _viz():
+    """Lazy-import plotting libs so the core module + tests don't require them."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set_theme(style="whitegrid")
+    return plt, sns
 COLS = ["chrom", "start", "end", "id", "score", "strand", "methRatio", "cytosineCount"]
 METH_THRESHOLD = 0.5            # a segment is "methylated" if methRatio >= this
 
@@ -78,6 +82,7 @@ def load_all(raw=RAW):
 
 # ---------------------------------------------------------------- EDA
 def eda(data):
+    plt, sns = _viz()
     summary = (data.groupby("tissue")
                .agg(n_segments=("methRatio", "size"),
                     mean_methRatio=("methRatio", "mean"),
@@ -133,6 +138,7 @@ def train_eval(model, X_tr, X_te, y_tr, y_te):
     }
 
 def run_models(data):
+    plt, sns = _viz()
     # subsample for tractable RBF-SVM training, stratified
     df = data.sample(min(15000, len(data)), random_state=RNG)
     y = df["methylated"].values
