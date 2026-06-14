@@ -7,3 +7,9 @@ non-leaky structural features.
 ```bash
 Rscript cpgmap.R   # reads ../data/raw, writes ../results/r_neuralnet.png
 ```
+
+## Tests
+Feature functions live in `features.R` and are unit-tested with `testthat`:
+```bash
+Rscript -e 'testthat::test_dir("r/tests/testthat")'
+```

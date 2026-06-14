@@ -39,27 +39,42 @@ os.makedirs(RES, exist_ok=True)
 sns.set_theme(style="whitegrid")
 RNG = 42
 COLS = ["chrom", "start", "end", "id", "score", "strand", "methRatio", "cytosineCount"]
+METH_THRESHOLD = 0.5            # a segment is "methylated" if methRatio >= this
 
-# ---------------------------------------------------------------- load
-def load_all():
+# Feature framings. Model B must NEVER use methRatio/score (that would leak the label).
+FRAMINGS = {
+    "A_leaky_with_methRatio": ["methRatio", "score", "cytosineCount"],
+    "B_nonleaky_structure":   ["log_length", "cytosineCount", "log_density"],
+}
+LEAKY_COLS = {"methRatio", "score"}   # columns that directly encode the label
+
+# ---------------------------------------------------------------- load (I/O)
+def parse_bed(path):
+    """Read one NGSmethDB BED(.bz2) dump into a DataFrame, tagged with its tissue."""
+    # skip the '#chrom...' comment header (skiprows=1) and assign our own names;
+    # header=None so the first real data row is kept, not eaten as a header.
+    df = pd.read_csv(path, sep="\t", header=None, names=COLS, skiprows=1,
+                     dtype={"chrom": str})
+    df["tissue"] = os.path.basename(path).split("_")[0]
+    return df
+
+def add_features(df):
+    """Pure feature engineering + binary methylation label (no I/O, no global state)."""
+    df = df.dropna(subset=["methRatio", "cytosineCount", "start", "end"]).copy()
+    df["region_length"] = (df["end"] - df["start"]).clip(lower=1)
+    df["log_length"] = np.log10(df["region_length"])
+    df["cpg_density"] = df["cytosineCount"] / df["region_length"]
+    df["log_density"] = np.log10(df["cpg_density"].clip(lower=1e-6))
+    df["methylated"] = (df["methRatio"] >= METH_THRESHOLD).astype(int)
+    return df
+
+def load_all(raw=RAW):
     frames = []
-    for path in sorted(glob.glob(os.path.join(RAW, "*.bed.bz2"))):
-        tissue = os.path.basename(path).split("_")[0]
-        df = pd.read_csv(path, sep="\t", comment=None, header=0, names=COLS, skiprows=1,
-                         dtype={"chrom": str})
-        df["tissue"] = tissue
+    for path in sorted(glob.glob(os.path.join(raw, "*.bed.bz2"))):
+        df = parse_bed(path)
         frames.append(df)
-        print(f"  loaded {tissue:16s} {len(df):>7,} segments")
-    data = pd.concat(frames, ignore_index=True)
-    # clean + feature engineering
-    data = data.dropna(subset=["methRatio", "cytosineCount", "start", "end"])
-    data["region_length"] = (data["end"] - data["start"]).clip(lower=1)
-    data["log_length"] = np.log10(data["region_length"])
-    data["cpg_density"] = data["cytosineCount"] / data["region_length"]
-    data["log_density"] = np.log10(data["cpg_density"].clip(lower=1e-6))
-    # binary label: methylated (1) vs unmethylated (0) at 0.5
-    data["methylated"] = (data["methRatio"] >= 0.5).astype(int)
-    return data
+        print(f"  loaded {df['tissue'].iloc[0]:16s} {len(df):>7,} segments")
+    return add_features(pd.concat(frames, ignore_index=True))
 
 # ---------------------------------------------------------------- EDA
 def eda(data):
@@ -93,18 +108,29 @@ def eda(data):
     return summary
 
 # ---------------------------------------------------------------- modeling
-def evaluate(name, model, X_tr, X_te, y_tr, y_te, results):
+def build_models(rng=RNG):
+    """Return the model zoo (fresh, unfitted) used for every framing."""
+    return {
+        "LogisticRegression": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
+        "SVM (RBF)":          make_pipeline(StandardScaler(), SVC(kernel="rbf", probability=True, random_state=rng)),
+        "NeuralNet (MLP)":    make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(8,), max_iter=400, random_state=rng)),
+    }
+
+def train_eval(model, X_tr, X_te, y_tr, y_te):
+    """Fit one model and score it. Deterministic given inputs + model seed.
+    Returns {accuracy, roc_auc, pred, proba}."""
     model.fit(X_tr, y_tr)
     pred = model.predict(X_te)
     try:
         proba = model.predict_proba(X_te)[:, 1]
     except AttributeError:
         proba = model.decision_function(X_te)
-    acc = accuracy_score(y_te, pred)
-    auc = roc_auc_score(y_te, proba)
-    results.append({"model": name, "accuracy": round(float(acc), 4), "roc_auc": round(float(auc), 4)})
-    print(f"    {name:24s} acc={acc:.3f}  auc={auc:.3f}")
-    return proba, pred
+    return {
+        "accuracy": float(accuracy_score(y_te, pred)),
+        "roc_auc": float(roc_auc_score(y_te, proba)),
+        "pred": pred,
+        "proba": proba,
+    }
 
 def run_models(data):
     # subsample for tractable RBF-SVM training, stratified
@@ -113,25 +139,19 @@ def run_models(data):
     out = {"label_balance_pct_methylated": round(float(y.mean()) * 100, 1)}
     print(f"\nLabel balance: {out['label_balance_pct_methylated']}% methylated (n={len(df):,} sampled)")
 
-    framings = {
-        "A_leaky_with_methRatio": ["methRatio", "score", "cytosineCount"],
-        "B_nonleaky_structure":   ["log_length", "cytosineCount", "log_density"],
-    }
-    models = {
-        "LogisticRegression": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
-        "SVM (RBF)":          make_pipeline(StandardScaler(), SVC(kernel="rbf", probability=True, random_state=RNG)),
-        "NeuralNet (MLP)":    make_pipeline(StandardScaler(), MLPClassifier(hidden_layer_sizes=(8,), max_iter=400, random_state=RNG)),
-    }
+    models = build_models()
     out["framings"] = {}
-    best_roc = None
-    for fname, feats in framings.items():
+    for fname, feats in FRAMINGS.items():
         print(f"\n  Framing {fname}  features={feats}")
         X = df[feats].values
         X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25, stratify=y, random_state=RNG)
         res = []
         rocs = {}
         for mname, model in models.items():
-            proba, pred = evaluate(mname, model, X_tr, X_te, y_tr, y_te, res)
+            r = train_eval(model, X_tr, X_te, y_tr, y_te)
+            proba, pred = r["proba"], r["pred"]
+            res.append({"model": mname, "accuracy": round(r["accuracy"], 4), "roc_auc": round(r["roc_auc"], 4)})
+            print(f"    {mname:24s} acc={r['accuracy']:.3f}  auc={r['roc_auc']:.3f}")
             rocs[mname] = roc_curve(y_te, proba)
             if fname.startswith("B") and mname == "SVM (RBF)":
                 # confusion matrix for the headline honest model

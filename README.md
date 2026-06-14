@@ -11,6 +11,10 @@ bisulfite-sequencing data from **NGSmethDB**.
 
 **Stack:** Python (pandas, scikit-learn) · R (neuralnet, e1071) · real WGBS data
 
+![tests](https://github.com/1shumail/CpGMAP/actions/workflows/tests.yml/badge.svg)
+![python](https://img.shields.io/badge/python-3.12-blue)
+![license](https://img.shields.io/badge/license-MIT-green)
+
 `Quick start` · `Data` · `Method` · `Results` · `The original project`
 
 ---
@@ -44,6 +48,20 @@ python python/cpgmap_analysis.py
 
 Outputs (figures + `metrics.json`) are written to `results/`.
 
+## ✅ Tests
+
+The analysis logic is unit-tested (16 tests, run on every push via GitHub Actions):
+
+```bash
+pip install pytest && pytest -q     # 16 passed
+```
+
+Tests cover BED parsing, every feature transform, the methylation-label rule and its
+boundary, the **no-data-leakage** guarantee (Model B never sees `methRatio`/`score`),
+model fit/score, reproducibility, and an end-to-end run on synthetic segments. R feature
+functions have matching `testthat` tests in `r/tests/`. *(These tests caught a real
+off-by-one bug in the BED parser during development.)*
+
 ## 🧬 Data
 
 Seven human-tissue **methylation segments** from **NGSmethDB** (WGBS, single-cytosine
@@ -69,18 +87,18 @@ Each framing compares **Logistic Regression**, an **SVM (RBF)**, and a small
 
 ## 📊 Results
 
-Across **429,477 methylation segments** from 7 tissues (65.2% methylated overall — the
+Across **429,484 methylation segments** from 7 tissues (64.2% methylated overall — the
 majority-class baseline to beat).
 
 **Model B — the honest task** (structure-only features, no leakage):
 
 | Model | Accuracy | ROC-AUC |
 |---|---|---|
-| Logistic Regression | 0.691 | 0.766 |
-| SVM (RBF) | 0.710 | 0.769 |
-| **Neural network (MLP)** | **0.716** | **0.787** |
+| Logistic Regression | 0.698 | 0.773 |
+| SVM (RBF) | 0.713 | 0.769 |
+| **Neural network (MLP)** | **0.716** | **0.789** |
 
-The neural net reaches **71.6% accuracy / 0.79 AUC — clearly above the 65.2% baseline**,
+The neural net reaches **71.6% accuracy / 0.79 AUC — clearly above the 64.2% baseline**,
 confirming that CpG density and region structure genuinely predict methylation status
 (CpG-dense islands trend unmethylated).
 

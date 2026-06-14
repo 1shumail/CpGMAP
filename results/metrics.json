@@ -1,5 +1,5 @@
 {
-  "label_balance_pct_methylated": 65.2,
+  "label_balance_pct_methylated": 64.2,
   "framings": {
     "A_leaky_with_methRatio": {
       "features": [
@@ -10,7 +10,7 @@
       "results": [
         {
           "model": "LogisticRegression",
-          "accuracy": 0.9989,
+          "accuracy": 0.9984,
           "roc_auc": 1.0
         },
         {
@@ -20,7 +20,7 @@
         },
         {
           "model": "NeuralNet (MLP)",
-          "accuracy": 0.9997,
+          "accuracy": 0.9981,
           "roc_auc": 1.0
         }
       ]
@@ -34,23 +34,23 @@
       "results": [
         {
           "model": "LogisticRegression",
-          "accuracy": 0.6912,
-          "roc_auc": 0.7663
+          "accuracy": 0.6981,
+          "roc_auc": 0.773
         },
         {
           "model": "SVM (RBF)",
-          "accuracy": 0.7101,
+          "accuracy": 0.7125,
           "roc_auc": 0.7685
         },
         {
           "model": "NeuralNet (MLP)",
-          "accuracy": 0.7163,
-          "roc_auc": 0.7872
+          "accuracy": 0.7155,
+          "roc_auc": 0.7894
         }
       ]
     }
   },
-  "n_segments_total": 429477,
+  "n_segments_total": 429484,
   "n_tissues": 7,
   "tissues": [
     "adipose",
