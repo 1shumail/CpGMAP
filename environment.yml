@@ -1,0 +1,10 @@
+name: cpgmap
+channels: [conda-forge]
+dependencies:
+  - python=3.12
+  - pandas
+  - numpy
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyter

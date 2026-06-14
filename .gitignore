@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+# R
+.Rproj.user/
+.Rhistory
+.RData
+# OS / editors
+.DS_Store
+*.suo
+# data exports we don't want to track
+*.xlsx

@@ -1,0 +1,8 @@
+tissue,n_segments,mean_methRatio,pct_methylated,median_cytosineCount,median_length
+adipose,73667,0.615,67.1,25.0,1128.0
+adrenalGland,52818,0.594,64.7,27.0,1140.0
+esophagus,67117,0.603,65.6,26.0,1148.0
+heartAorta,63121,0.595,64.1,26.0,1157.0
+pancreas,61630,0.56,60.6,28.0,1191.0
+smallIntestine,56540,0.578,61.3,25.0,1273.0
+spleen,54584,0.605,65.7,25.0,1119.0
